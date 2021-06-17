@@ -5,7 +5,7 @@
 #include <map>
 
 CrashDump memoryDump;
-#define THREAD_NUM 4
+#define THREAD_NUM 16
 #define INIT_DATA 0x0000000055555555
 #define INIT_COUNT  0
 #define DATA_COUNT 3

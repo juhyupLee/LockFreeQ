@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+  <Type Name="Q_LOG">
+    <DisplayString> NO[{_No}],POS [{_POS}],ThreadID [{_ThreadID}],_FrontPtr[{_FrontPtr}],_RearPtr[{_RearPtr}],_TempFrontPtr[{_TempFrontPtr}],_TempRearPtr[{_TempRearPtr}],_NewNodePtr[{_NewNodePtr}],_Data[{_Data}],_RearNext[{_RearNext}],_CurDummyNode[{_CurDummyNode} _Count[{_Count}]] </DisplayString>
+  </Type>
+
+</AutoVisualizer>
+
