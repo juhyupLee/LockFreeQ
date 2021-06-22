@@ -5,12 +5,15 @@
 #include <map>
 
 CrashDump memoryDump;
-#define THREAD_NUM 4
+#define THREAD_NUM 16
 #define INIT_DATA 0x0000000055555555
 #define INIT_COUNT  0
 #define DATA_COUNT 3
+#define TEST_MODE 1
 
 HANDLE g_Thread[THREAD_NUM];
+HANDLE g_EnQThread;
+HANDLE g_DeQThread;
 MemoryLogging_ST<10000> g_MemoryLogQ;
 
 int64_t g_MemoryCount = 0;
@@ -32,6 +35,69 @@ void Crash()
 {
 	int* p = nullptr;
 	*p = 20;
+}
+
+unsigned int __stdcall TestEnQ(LPVOID param)
+{
+	TestData data;
+
+	while (true)
+	{
+		InterlockedIncrement64(&data._Data);
+		InterlockedIncrement(&data._RefCount);
+
+
+		if (data._Data != INIT_DATA + 1)
+		{
+			Crash();
+		}
+		if (data._RefCount != INIT_COUNT + 1)
+		{
+			Crash();
+		}
+
+		InterlockedDecrement64(&data._Data);
+		InterlockedDecrement(&data._RefCount);
+
+		if (data._Data != INIT_DATA)
+		{
+			Crash();
+		}
+		if (data._RefCount != INIT_COUNT)
+		{
+			Crash();
+		}
+
+		g_Q.EnQ(&data);
+	}
+
+}
+
+
+unsigned int __stdcall TestDeQ(LPVOID param)
+{
+	TestData* data = nullptr;
+
+	while (true)
+	{
+
+
+		if (!g_Q.DeQ(&data))
+		{
+			continue;
+		}
+	
+		if (data->_Data != INIT_DATA)
+		{
+			Crash();
+		}
+		if (data->_RefCount != INIT_COUNT)
+		{
+			Crash();
+		}
+
+	}
+
 }
 
 unsigned int __stdcall TestThread(LPVOID param)
@@ -83,7 +149,7 @@ unsigned int __stdcall TestThread(LPVOID param)
 			g_Q.EnQ(dataArray[i]);
 		}
 
-		//Sleep(5);
+		//Sleep(10);
 
 		memset(dataArray, 0, sizeof(TestData*) * DATA_COUNT);
 
@@ -93,12 +159,12 @@ unsigned int __stdcall TestThread(LPVOID param)
 		{
 			if (!g_Q.DeQ(&dataArray[i]))
 			{
-				Crash();
+				//Crash();
 				--i;
 				failCount++;
 			}
 		}
-		//Sleep(5);
+		//Sleep(1);
 		for (int i = 0; i < DATA_COUNT; ++i)
 		{
 			if (dataArray[i] == nullptr)
@@ -121,6 +187,8 @@ unsigned int __stdcall TestThread(LPVOID param)
 }
 int main()
 {
+
+#if TEST_MODE ==1
 	TestData* dataArray[THREAD_NUM][DATA_COUNT];
 	std::map<int64_t, TestData*> DataReUseTest;
 
@@ -179,12 +247,22 @@ int main()
 		g_Thread[i] = (HANDLE)_beginthreadex(NULL, 0, TestThread, (void*)dataArray[i], 0, NULL);
 	}
 
+#endif
+
+#if TEST_MODE==2
+
+	g_EnQThread = (HANDLE)_beginthreadex(NULL, 0, TestEnQ, NULL, 0, NULL);
+	g_DeQThread = (HANDLE)_beginthreadex(NULL, 0, TestDeQ, NULL, 0, NULL);
+#endif
+
 
 	while (true)
 	{
 		wprintf(L"Q Count: %d\n", g_Q.m_Count);
 		wprintf(L"Memory AllocCount: %d\n", g_Q.GetMemoryPoolAllocCount());
-	
+		wprintf(L"m_Rear :%p\n", g_Q.m_RearCheck->_NodePtr);
+		wprintf(L"m_Front :%p\n", g_Q.m_FrontCheck->_NodePtr);
+		wprintf(L"m_ID :%lld\n", g_Q.m_ID);
 		Sleep(1000);
 
 	}

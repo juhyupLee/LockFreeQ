@@ -40,15 +40,22 @@ enum class ePOS
 	ALLOC_NODE_ENQ,
 	TEMP_REAR_SETTING_ENQ,
 	CHANGEVALUE_SETTING_ENQ,
-	CAS1_FAIL_ENQ,
+	CAS1_FAIL_BUT_CHANGE_REAR_ENQ,
+	CAS1_FAIL_NO_CHANGE,
 	CAS1_SUC_ENQ,
-	CAS2_FAIL_ENQ,
-	CAS2_SUC_ENQ,
+	CAS2_SUC_NEWNODE1_ENQ,
+	CAS2_FAIL_NEWNODE1_ENQ,
+	CAS2_SUC_NEWNODE2_ENQ,
+	CAS2_FAIL_NEWNODE2_ENQ,
+	LOOP_OUT_ENQ,
+
 	ENTRY_DEQ,
 	NODE_ZERO_DEQ1,
 	NODE_ZERO_DEQ2,
 	TEMP_FRONT_SETTING_DEQ,
 	CHANGEVALUE_SETTING_DEQ,
+	CAS2_SUC_DEQ,
+	CAS2_FAIL_DEQ,
 	LOOP_OUT_DEQ,
 	FREE_NODE_DEQ,
 	RETURN_DATA_DEQ,
@@ -70,9 +77,11 @@ struct Q_LOG
 	int64_t _Data;
 	int64_t _RearNext;
 	int64_t _CurDummyNode;
+	int64_t _NewNext;
 	LONG _Count;
+	int32_t _LoopCount;
 
-	void DataSettiong(int64_t no, ePOS pos, DWORD threadid, int64_t frontPtr, int64_t rearPtr, int64_t _tempFrontPtr, int64_t tempRearPtr, int64_t newNodePtr, int64_t data, int64_t rearNext, int64_t curDummy, LONG count=-1)
+	void DataSettiong(int64_t no, ePOS pos, DWORD threadid, int64_t frontPtr, int64_t rearPtr, int64_t _tempFrontPtr, int64_t tempRearPtr, int64_t newNodePtr, int64_t data, int64_t rearNext, int64_t curDummy,int64_t newNext=-1, LONG count=-1,int loopCount=-1)
 	{
 		_No = no;
 		_POS = pos;
@@ -85,7 +94,9 @@ struct Q_LOG
 		_Data = data;
 		_RearNext = rearNext;
 		_CurDummyNode = curDummy;
+		_NewNext = newNext;
 		_Count = count;
+		_LoopCount = loopCount;
 	}
 };
 
