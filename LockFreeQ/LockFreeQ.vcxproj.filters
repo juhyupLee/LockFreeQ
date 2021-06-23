@@ -26,16 +26,16 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="LockFreeQ.h">
+    <ClInclude Include="MemoryDump.h">
       <Filter>소스 파일</Filter>
     </ClInclude>
-    <ClInclude Include="MemoryDump.h">
+    <ClInclude Include="MemoryLog.h">
       <Filter>소스 파일</Filter>
     </ClInclude>
     <ClInclude Include="FreeList.h">
       <Filter>소스 파일</Filter>
     </ClInclude>
-    <ClInclude Include="MemoryLog.h">
+    <ClInclude Include="LockFreeQ.h">
       <Filter>소스 파일</Filter>
     </ClInclude>
   </ItemGroup>

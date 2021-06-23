@@ -34,7 +34,7 @@ class LockFreeQ
 public:
 	LockFreeQ()
 	{
-		m_ID = KERNEL_ADDRESS;
+		m_RearID = KERNEL_ADDRESS;
 		m_Count = 0;
 		m_FrontCheck = (QCheck*)_aligned_malloc(sizeof(QCheck), 16);
 		m_RearCheck = (QCheck*)_aligned_malloc(sizeof(QCheck), 16);
@@ -44,12 +44,12 @@ public:
 		//-----------------------------------------------
 		
 		m_FrontCheck->_NodePtr = m_MemoryPool.Alloc();
-		m_FrontCheck->_ID = _InterlockedIncrement64(&m_ID);
-		m_FrontCheck->_NodePtr->_Next = (Node*)m_FrontCheck->_ID;
+		m_FrontCheck->_ID = 0;
+		m_FrontCheck->_NodePtr->_Next = (Node*)m_RearID;
 
 		m_RearCheck->_NodePtr = m_FrontCheck->_NodePtr;
-		m_RearCheck->_ID = m_FrontCheck->_ID;
-		m_RearCheck->_NodePtr->_Next = (Node*)m_RearCheck->_ID;
+		m_RearCheck->_ID = m_RearID;
+		//m_RearCheck->_NodePtr->_Next = (Node*)m_RearCheck->_ID;
 
 	}
 	~LockFreeQ()
@@ -72,7 +72,8 @@ public:
 
 	QCheck* m_FrontCheck;
 	QCheck* m_RearCheck;
-	int64_t m_ID;
+	int64_t m_RearID;
+
 	FreeList<Node> m_MemoryPool;
 
 };
@@ -97,7 +98,8 @@ inline bool LockFreeQ<T>::EnQ(T data)
 	//	Crash();
 	//}
 	newNode->_Data = data;
-	newNode->_Next = (Node*)InterlockedIncrement64(&m_ID);
+	newNode->_Next = (Node*)InterlockedIncrement64(&m_RearID);
+	
 	
 	logData.DataSettiong(InterlockedIncrement64(&g_MemoryCount), ePOS::ALLOC_NODE_ENQ, GetCurrentThreadId(), (int64_t)m_FrontCheck->_NodePtr, (int64_t)m_RearCheck->_NodePtr, -1, -1, (int64_t)newNode, (int64_t)data, -1, -1,(int64_t)newNode->_Next ,m_Count);
 	g_MemoryLogQ.MemoryLogging(logData);
@@ -213,11 +215,6 @@ inline bool LockFreeQ<T>::DeQ(T* data)
 	QCheck changeValue;
 	T tempData = NULL;
 
-
-	//if ((int64_t)m_FrontCheck->_NodePtr->_Next > KERNEL_ADDRESS)
-	//{
-	//	return false;
-	//}
 	if (InterlockedDecrement(&m_Count) < 0)
 	{
 		InterlockedIncrement(&m_Count);
@@ -229,39 +226,41 @@ inline bool LockFreeQ<T>::DeQ(T* data)
 
 	logData.DataSettiong(InterlockedIncrement64(&g_MemoryCount), ePOS::ENTRY_DEQ, GetCurrentThreadId(), (int64_t)m_FrontCheck->_NodePtr, (int64_t)m_RearCheck->_NodePtr, -1, -1, -1, -1, -1, -1, m_Count);
 	g_MemoryLogQ.MemoryLogging(logData);
+
+	tempFront._NodePtr = m_FrontCheck->_NodePtr;
+	tempFront._ID = m_FrontCheck->_ID;
+	logData.DataSettiong(InterlockedIncrement64(&g_MemoryCount), ePOS::TEMP_FRONT_SETTING_DEQ, GetCurrentThreadId(), (int64_t)m_FrontCheck->_NodePtr, (int64_t)m_RearCheck->_NodePtr, (int64_t)tempFront._NodePtr, -1, -1, -1, -1, -1, m_Count);
+	g_MemoryLogQ.MemoryLogging(logData);
+
 	do
 	{
-		tempFront._NodePtr = m_FrontCheck->_NodePtr;
-		tempFront._ID = m_FrontCheck->_ID;
-
-		logData.DataSettiong(InterlockedIncrement64(&g_MemoryCount), ePOS::TEMP_FRONT_SETTING_DEQ, GetCurrentThreadId(), (int64_t)m_FrontCheck->_NodePtr, (int64_t)m_RearCheck->_NodePtr, (int64_t)tempFront._NodePtr, -1, -1, -1, -1, -1, m_Count);
-		g_MemoryLogQ.MemoryLogging(logData);
 		//-----------------------------
-		// Front는 항상 더미 노드를 가리키고있음
+		// Change Value Setting
 		//-----------------------------
 		changeValue._NodePtr = tempFront._NodePtr->_Next;
 
 		//--------------------------------------------------------
-		// 애초에 이상황이 오면 안됨. -> 아니다 말이된다 (ABA문제로)
+		// 동시에 tempRear을 같은것을 가르킨다거나, ABA문제가 나타나면 
+		// 아래와같은 Next->끝인 상황이 나올 수 있다 
+		// 근데 내경우는 ABA문제를 해결하는 코드이기때문에 전자일것이다.
 		//--------------------------------------------------------
 		if ((int64_t)changeValue._NodePtr >= KERNEL_ADDRESS)
 		{
 			logData.DataSettiong(InterlockedIncrement64(&g_MemoryCount), ePOS::NODE_ZERO_DEQ2, GetCurrentThreadId(), (int64_t)m_FrontCheck->_NodePtr, (int64_t)m_RearCheck->_NodePtr, (int64_t)tempFront._NodePtr, -1, -1, -1, -1, -1, m_Count);
 			g_MemoryLogQ.MemoryLogging(logData);
 			continue;
-			//Crash();
-			//changeValue._ID = -1;
-			//continue;
-			//Crash();
-			//return false;
 		}
 		
 
-		changeValue._ID = InterlockedIncrement64(&m_ID);//changeValue._NodePtr->_ID;
+		changeValue._ID = tempFront._ID + 1;
+		//--------------------------------------------
+		// tempData를 미리 저장해놔야한다.
+		//--------------------------------------------
 		tempData = changeValue._NodePtr->_Data;
-		
+
 		logData.DataSettiong(InterlockedIncrement64(&g_MemoryCount), ePOS::CHANGEVALUE_SETTING_DEQ, GetCurrentThreadId(), (int64_t)m_FrontCheck->_NodePtr, (int64_t)m_RearCheck->_NodePtr, (int64_t)tempFront._NodePtr, -1, -1, -1, -1, (int64_t)changeValue._NodePtr, m_Count);
 		g_MemoryLogQ.MemoryLogging(logData);
+
 		BOOL result = InterlockedCompareExchange128((LONG64*)m_FrontCheck, (LONG64)changeValue._ID, (LONG64)changeValue._NodePtr, (LONG64*)&tempFront);
 		if (result == TRUE)
 		{
@@ -288,7 +287,6 @@ inline bool LockFreeQ<T>::DeQ(T* data)
 	logData.DataSettiong(InterlockedIncrement64(&g_MemoryCount), ePOS::RETURN_DATA_DEQ, GetCurrentThreadId(), (int64_t)m_FrontCheck->_NodePtr, (int64_t)m_RearCheck->_NodePtr, (int64_t)tempFront._NodePtr, -1, -1, (int64_t)changeValue._NodePtr->_Data, -1, (int64_t)changeValue._NodePtr, m_Count);
 	g_MemoryLogQ.MemoryLogging(logData);
 
-	//InterlockedDecrement(&m_Count);
 	return true;
 }
 

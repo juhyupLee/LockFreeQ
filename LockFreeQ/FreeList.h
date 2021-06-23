@@ -50,11 +50,6 @@ public:
 
 	struct TopCheck
 	{
-		TopCheck()
-		{
-			_TopPtr = nullptr;
-			_ID = -1;
-		}
 		Node* _TopPtr;
 		int64_t _ID;
 	};
@@ -73,8 +68,9 @@ public:
 		m_AllocCount(0),
 		m_MarkValue(++g_Mark)
 	{
-		m_NodeID = -1;
-		m_TopCheck = new TopCheck;
+		m_TopCheck = (TopCheck*)_aligned_malloc(sizeof(TopCheck), 16);
+		m_TopCheck->_TopPtr = nullptr;
+		m_TopCheck->_ID = 0;
 
 	}
 	FreeList(int32_t blockNum, bool placementNew=false)
@@ -83,10 +79,11 @@ public:
 		m_MarkValue(++g_Mark),
 		m_UseCount(0),
 		m_PoolCount(0),
-		m_AllocCount(0),
-		m_NodeID(-1)
+		m_AllocCount(0)
 	{
-		m_TopCheck = new TopCheck;
+		m_TopCheck = (TopCheck*)_aligned_malloc(sizeof(TopCheck), 16);
+		m_TopCheck->_TopPtr = nullptr;
+		m_TopCheck->_ID = 0;
 
 		for (int i = 0; i < blockNum; i++)
 		{
@@ -121,8 +118,7 @@ public:
 			free(delNode);
 		}
 
-		delete m_TopCheck;
-
+		_aligned_free(m_TopCheck);
 	}
 
 	int32_t GetPoolCount();
@@ -138,12 +134,10 @@ private:
 	TopCheck* m_TopCheck;
 
 	bool m_bPlacementNew;
+
 	LONG m_UseCount;
-
 	LONG m_AllocCount;
-
 	LONG m_PoolCount;
-	int64_t m_NodeID;
 
 	const int64_t m_MarkValue;
 
@@ -265,15 +259,17 @@ bool FreeList<T>::Free(T* data)
 
 	TopCheck tempTop;
 	TopCheck changeValue;
+
+	tempTop._TopPtr = m_TopCheck->_TopPtr;
+	tempTop._ID = m_TopCheck->_ID;
 	do
 	{
-		tempTop._TopPtr = m_TopCheck->_TopPtr;
-		tempTop._ID = m_TopCheck->_ID;
-
+		//-------------------------------------------------------------------------------------------
+		//  FreeNode(반납된 노드) ->  CurrentTop  반납된 노드의 Next포인터를 현재의 Top을가르키게함
+		//-------------------------------------------------------------------------------------------
 		freeNode->_Next = tempTop._TopPtr;
-
 		changeValue._TopPtr = freeNode;
-		changeValue._ID = InterlockedIncrement64(&m_NodeID);
+		changeValue._ID = tempTop._ID + 1;
 
 	} while (!InterlockedCompareExchange128((LONG64*)m_TopCheck, (LONG64)changeValue._ID, (LONG64)changeValue._TopPtr, (LONG64*)&tempTop));
 
@@ -294,27 +290,19 @@ T* FreeList<T>::Alloc()
 	TopCheck tempTop;
 	TopCheck changeValue;
 
+	tempTop._TopPtr = m_TopCheck->_TopPtr;
+	tempTop._ID = m_TopCheck->_ID;
+
 	do
 	{
-		tempTop._TopPtr = m_TopCheck->_TopPtr;
-		tempTop._ID = m_TopCheck->_ID;
-
 		if (tempTop._TopPtr == nullptr)
 		{
 			return AllocateNewMemory();
 		}
 
 		Node* nextNode = tempTop._TopPtr->_Next;
-
 		changeValue._TopPtr = nextNode;
-		if (nextNode == nullptr)
-		{
-			changeValue._ID = -1;
-		}
-		else
-		{
-			changeValue._ID = InterlockedIncrement64(&m_NodeID);
-		}
+		changeValue._ID = tempTop._ID + 1;
 
 	} while (!InterlockedCompareExchange128((LONG64*)m_TopCheck, (LONG64)changeValue._ID, (LONG64)changeValue._TopPtr, (LONG64*)&tempTop));
 

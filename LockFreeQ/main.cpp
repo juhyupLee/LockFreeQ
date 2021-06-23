@@ -3,9 +3,9 @@
 #include "LockFreeQ.h"
 #include <process.h>
 #include <map>
-
+#include <locale>
 CrashDump memoryDump;
-#define THREAD_NUM 16
+#define THREAD_NUM 2
 #define INIT_DATA 0x0000000055555555
 #define INIT_COUNT  0
 #define DATA_COUNT 3
@@ -17,6 +17,9 @@ HANDLE g_DeQThread;
 MemoryLogging_ST<10000> g_MemoryLogQ;
 
 int64_t g_MemoryCount = 0;
+
+int g_TestMode = 0;
+
 struct TestData
 {
 	TestData()
@@ -149,7 +152,11 @@ unsigned int __stdcall TestThread(LPVOID param)
 			g_Q.EnQ(dataArray[i]);
 		}
 
-		//Sleep(10);
+		if (g_TestMode == 2)
+		{
+			Sleep(0);
+		}
+	
 
 		memset(dataArray, 0, sizeof(TestData*) * DATA_COUNT);
 
@@ -157,14 +164,13 @@ unsigned int __stdcall TestThread(LPVOID param)
 
 		for (int i = 0; i < DATA_COUNT; ++i)
 		{
-			if (!g_Q.DeQ(&dataArray[i]))
-			{
-				//Crash();
-				--i;
-				failCount++;
-			}
+			g_Q.DeQ(&dataArray[i]);
 		}
-		//Sleep(1);
+		//
+		if (g_TestMode == 3)
+		{
+			Sleep(0);
+		}
 		for (int i = 0; i < DATA_COUNT; ++i)
 		{
 			if (dataArray[i] == nullptr)
@@ -187,64 +193,98 @@ unsigned int __stdcall TestThread(LPVOID param)
 }
 int main()
 {
+	setlocale(LC_ALL, "");
+
+	int threadNum = 0;
+	int dataCount = 0;
+	HANDLE* threadHandle = nullptr;
+
+
+	wprintf(L"Thread Count:");
+	int error =wscanf_s(L"%d", &threadNum);
+
+	wprintf(L"Data Count:");
+	error = wscanf_s(L"%d", &dataCount);
+
+
+	wprintf(L"=================\n");
+	wprintf(L"1.Normal\n");
+	wprintf(L"2.EnQ\n");
+	wprintf(L"3.DeQ\n");
+	wprintf(L"=================\n");
+	wprintf(L"TestMode:");
+	error = wscanf_s(L"%d", &g_TestMode);
+
+
 
 #if TEST_MODE ==1
-	TestData* dataArray[THREAD_NUM][DATA_COUNT];
+	//TestData* dataArray[THREAD_NUM][DATA_COUNT];
 	std::map<int64_t, TestData*> DataReUseTest;
 
-	for (int i = 0; i < THREAD_NUM; ++i)
+	TestData*** threadData = new TestData * *[threadNum];
+
+	for (int i = 0; i < threadNum; ++i)
 	{
-		for (int j = 0; j < DATA_COUNT; ++j)
+		threadData[i] = new TestData * [dataCount];
+	}
+	
+
+	threadHandle = new HANDLE[threadNum];
+
+
+	for (int i = 0; i < threadNum; ++i)
+	{
+		for (int j = 0; j < dataCount; ++j)
 		{
-			dataArray[i][j] = new TestData;
+			threadData[i][j] = new TestData;
 
-			DataReUseTest.insert(std::make_pair((int64_t)dataArray[i][j], dataArray[i][j]));
+			DataReUseTest.insert(std::make_pair((int64_t)threadData[i][j], threadData[i][j]));
 
-			if (dataArray[i][j] == nullptr)
+			if (threadData[i][j] == nullptr)
 			{
 				Crash();
 			}
-			if (dataArray[i][j]->_Data != INIT_DATA)
+			if (threadData[i][j]->_Data != INIT_DATA)
 			{
 				Crash();
 			}
-			if (dataArray[i][j]->_RefCount != INIT_COUNT)
+			if (threadData[i][j]->_RefCount != INIT_COUNT)
 			{
 				Crash();
 			}
 		}
 
 	}
-
-	for (int i = 0; i < THREAD_NUM; ++i)
+	for (int i = 0; i < threadNum; ++i)
 	{
-		for (int j = 0; j < DATA_COUNT; ++j)
+		for (int j = 0; j < dataCount; ++j)
 		{
-			
-			auto iter= DataReUseTest.find((int64_t)dataArray[i][j]);
-			
+
+			auto iter = DataReUseTest.find((int64_t)threadData[i][j]);
+
 			if (iter == DataReUseTest.end())
 			{
 				Crash();
 			}
-			if (dataArray[i][j] == nullptr)
+			if (threadData[i][j] == nullptr)
 			{
 				Crash();
 			}
-			if (dataArray[i][j]->_Data != INIT_DATA)
+			if (threadData[i][j]->_Data != INIT_DATA)
 			{
 				Crash();
 			}
-			if (dataArray[i][j]->_RefCount != INIT_COUNT)
+			if (threadData[i][j]->_RefCount != INIT_COUNT)
 			{
 				Crash();
 			}
 		}
 
 	}
-	for (int i = 0; i < THREAD_NUM; ++i)
+
+	for (int i = 0; i < threadNum; ++i)
 	{
-		g_Thread[i] = (HANDLE)_beginthreadex(NULL, 0, TestThread, (void*)dataArray[i], 0, NULL);
+		threadHandle[i] = (HANDLE)_beginthreadex(NULL, 0, TestThread, (void*)threadData[i], 0, NULL);
 	}
 
 #endif
@@ -256,13 +296,17 @@ int main()
 #endif
 
 
+	int64_t prevID = g_Q.m_RearID;
+	int64_t tempDif = 0;
+
 	while (true)
 	{
-		wprintf(L"Q Count: %d\n", g_Q.m_Count);
-		wprintf(L"Memory AllocCount: %d\n", g_Q.GetMemoryPoolAllocCount());
-		wprintf(L"m_Rear :%p\n", g_Q.m_RearCheck->_NodePtr);
-		wprintf(L"m_Front :%p\n", g_Q.m_FrontCheck->_NodePtr);
-		wprintf(L"m_ID :%lld\n", g_Q.m_ID);
+		tempDif = g_Q.m_RearID - prevID;
+
+		wprintf(L"[Q Count: %d]\n[Memory AllocCount: %d]\n[m_Rear :%p]\n[m_Front :%p]\n[ID / s :%lld]\n[Rear ID : %lld]\n",
+			g_Q.m_Count, g_Q.GetMemoryPoolAllocCount(), g_Q.m_RearCheck->_NodePtr, g_Q.m_FrontCheck->_NodePtr, tempDif, g_Q.m_RearID);
+		
+		prevID = g_Q.m_RearID;
 		Sleep(1000);
 
 	}
