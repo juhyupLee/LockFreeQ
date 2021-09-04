@@ -106,7 +106,7 @@ class MemoryLogging_New
 public:
 	enum
 	{
-		USE_LOG = 1,
+		USE_LOG = 0,
 		MAX_SIZE = size
 	};
 public:
@@ -133,7 +133,7 @@ class MemoryLogging_ST
 public:
 	enum
 	{
-		USE_LOG = 1,
+		USE_LOG = 0,
 		MAX_SIZE = size
 	};
 public:

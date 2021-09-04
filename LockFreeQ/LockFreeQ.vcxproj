@@ -146,14 +146,17 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="FreeList.cpp" />
+    <ClCompile Include="LockFreeQ.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MemoryDump.cpp" />
+    <ClCompile Include="Profiler.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="FreeList.h" />
     <ClInclude Include="LockFreeQ.h" />
     <ClInclude Include="MemoryDump.h" />
     <ClInclude Include="MemoryLog.h" />
+    <ClInclude Include="Profiler.h" />
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="NatvisFile.natvis" />

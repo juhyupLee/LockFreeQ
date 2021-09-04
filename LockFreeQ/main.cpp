@@ -4,6 +4,11 @@
 #include <process.h>
 #include <map>
 #include <locale>
+#include "MemoryLog.h"
+#include "Profiler.h"
+
+Profiler g_Profiler;
+
 CrashDump memoryDump;
 #define THREAD_NUM 2
 #define INIT_DATA 0x0000000055555555
@@ -14,11 +19,10 @@ CrashDump memoryDump;
 HANDLE g_Thread[THREAD_NUM];
 HANDLE g_EnQThread;
 HANDLE g_DeQThread;
-MemoryLogging_ST<10000> g_MemoryLogQ;
-
-int64_t g_MemoryCount = 0;
+//MemoryLogging_ST<10000> g_MemoryLogQ;
 
 int g_TestMode = 0;
+bool g_ExitFlag = false;
 
 struct TestData
 {
@@ -34,11 +38,7 @@ struct TestData
 LockFreeQ<TestData*> g_Q;
 
 
-void Crash()
-{
-	int* p = nullptr;
-	*p = 20;
-}
+
 
 unsigned int __stdcall TestEnQ(LPVOID param)
 {
@@ -46,6 +46,7 @@ unsigned int __stdcall TestEnQ(LPVOID param)
 
 	while (true)
 	{
+	
 		InterlockedIncrement64(&data._Data);
 		InterlockedIncrement(&data._RefCount);
 
@@ -109,6 +110,11 @@ unsigned int __stdcall TestThread(LPVOID param)
 
 	while (1)
 	{
+		if (g_ExitFlag)
+		{
+			break;
+		}
+
 		for (int i = 0; i < DATA_COUNT; ++i)
 		{
 			InterlockedIncrement64(&dataArray[i]->_Data);
@@ -149,7 +155,10 @@ unsigned int __stdcall TestThread(LPVOID param)
 
 		for (int i = 0; i < DATA_COUNT; ++i)
 		{
+			g_Profiler.ProfileBegin(L"EnQ");
 			g_Q.EnQ(dataArray[i]);
+			g_Profiler.ProfileEnd(L"EnQ");
+
 		}
 
 		if (g_TestMode == 2)
@@ -164,7 +173,9 @@ unsigned int __stdcall TestThread(LPVOID param)
 
 		for (int i = 0; i < DATA_COUNT; ++i)
 		{
+			g_Profiler.ProfileBegin(L"DeQ");
 			g_Q.DeQ(&dataArray[i]);
+			g_Profiler.ProfileEnd(L"DeQ");
 		}
 		//
 		if (g_TestMode == 3)
@@ -301,15 +312,27 @@ int main()
 
 	while (true)
 	{
-		tempDif = g_Q.m_RearID - prevID;
 
-		wprintf(L"[Q Count: %d]\n[Memory AllocCount: %d]\n[m_Rear :%p]\n[m_Front :%p]\n[ID / s :%lld]\n[Rear ID : %lld]\n",
-			g_Q.m_Count, g_Q.GetMemoryPoolAllocCount(), g_Q.m_RearCheck->_NodePtr, g_Q.m_FrontCheck->_NodePtr, tempDif, g_Q.m_RearID);
-		
-		prevID = g_Q.m_RearID;
+
+		if (GetAsyncKeyState(VK_F4))
+		{
+			g_ExitFlag = true;
+			break;
+		}
+		wprintf(L"[Q Count: %d]\n[Memory AllocCount: %d]\n[m_Rear :%p]\n[m_Front :%p]\n[EnQ TPS:%d]\n[DeQ TPS: %d]\n",
+			g_Q.m_Count, g_Q.GetMemoryPoolAllocCount(), g_Q.m_RearCheck->_NodePtr, g_Q.m_FrontCheck->_NodePtr,g_Q.m_EnQTPS, g_Q.m_DeQTPS);
+
+		g_Q.m_EnQTPS = 0;
+		g_Q.m_DeQTPS = 0;
+
 		Sleep(1000);
 
 	}
+
+	DWORD workerExit = WaitForMultipleObjects(threadNum, threadHandle, TRUE, INFINITE);
+
+	g_Profiler.ProfileDataOutText(L"ProfileReport.txt");
+
 }
 
 
